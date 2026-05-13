@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>버디박스 이벤트 트래픽 회고 리포트</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0e0f11; --bg-card: #16181c; --bg-card2: #1c1f25;
+    --border: rgba(255,255,255,0.07); --border-accent: rgba(255,255,255,0.14);
+    --text-primary: #f0f0f0; --text-secondary: #8a8f9a; --text-muted: #555a66;
+    --teal: #3ecf8e; --teal-dim: rgba(62,207,142,0.12);
+    --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
+    --orange: #fb923c; --orange-dim: rgba(251,146,60,0.12);
+    --red: #f87171; --red-dim: rgba(248,113,113,0.15);
+    --gray: #6b7280; --gray-dim: rgba(107,114,128,0.12);
+  }
+  body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text-primary); line-height: 1.6; font-size: 14px; }
+
+  header { padding: 56px 48px 40px; border-bottom: 0.5px solid var(--border); position: relative; overflow: hidden; }
+  header::before { content: ''; position: absolute; top: -60px; right: -60px; width: 320px; height: 320px; background: radial-gradient(circle, rgba(62,207,142,0.08) 0%, transparent 70%); pointer-events: none; }
+  .header-tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--teal); border: 0.5px solid var(--teal); padding: 3px 10px; border-radius: 3px; margin-bottom: 16px; letter-spacing: 0.08em; }
+  header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+  header p { color: var(--text-secondary); font-size: 13px; }
+  .header-meta { display: flex; gap: 24px; margin-top: 24px; flex-wrap: wrap; }
+  .meta-item { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+  .meta-item span { color: var(--text-secondary); }
+
+  main { padding: 0 48px 80px; max-width: 1200px; margin: 0 auto; }
+  section { margin-top: 56px; }
+  .section-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+  .section-label::after { content: ''; flex: 1; height: 0.5px; background: var(--border); }
+  h3 { font-size: 14px; font-weight: 500; margin-bottom: 12px; color: var(--text-secondary); }
+
+  .card { background: var(--bg-card); border: 0.5px solid var(--border); border-radius: 10px; padding: 20px 24px; }
+  .card-grid { display: grid; gap: 12px; }
+  .card-grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .card-grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+
+  .stat-card { background: var(--bg-card); border: 0.5px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+  .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; font-family: 'JetBrains Mono', monospace; }
+  .stat-value { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; font-family: 'JetBrains Mono', monospace; }
+  .stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+  .incident-card { background: var(--bg-card); border: 0.5px solid rgba(248,113,113,0.25); border-radius: 10px; padding: 24px; position: relative; overflow: hidden; }
+  .incident-card::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; background: var(--red); }
+  .incident-title { font-size: 13px; font-weight: 500; color: var(--red); margin-bottom: 16px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.04em; }
+  .timeline-row { display: flex; align-items: flex-start; gap: 14px; padding: 9px 0; border-bottom: 0.5px solid var(--border); }
+  .timeline-row:last-child { border-bottom: none; }
+  .timeline-time { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--red); min-width: 52px; }
+  .timeline-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+  .dot-red { background: var(--red); }
+  .dot-teal { background: var(--teal); }
+  .dot-muted { background: var(--text-muted); }
+  .timeline-content { font-size: 13px; color: var(--text-secondary); flex: 1; }
+  .timeline-content strong { color: var(--text-primary); font-weight: 500; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead tr { border-bottom: 0.5px solid var(--border-accent); }
+  th { text-align: left; padding: 10px 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 400; white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 0.5px solid var(--border); color: var(--text-secondary); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  td.mono { font-family: 'JetBrains Mono', monospace; }
+  td strong { color: var(--text-primary); font-weight: 500; }
+  .red-val { color: var(--red) !important; font-weight: 500; }
+  .orange-val { color: var(--orange) !important; font-weight: 500; }
+
+  .badge { display: inline-block; font-size: 10px; font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 3px; }
+  .badge-teal { background: var(--teal-dim); color: var(--teal); }
+  .badge-orange { background: var(--orange-dim); color: var(--orange); }
+  .badge-red { background: var(--red-dim); color: var(--red); }
+  .badge-gray { background: var(--gray-dim); color: var(--gray); }
+
+  .chart-wrap { position: relative; width: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+  .legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+  .insight { background: var(--bg-card2); border-left: 2px solid var(--teal); padding: 14px 18px; border-radius: 0 8px 8px 0; margin-top: 16px; font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+  .insight strong { color: var(--teal); font-weight: 500; }
+  .insight.warn { border-color: var(--orange); }
+  .insight.warn strong { color: var(--orange); }
+  .insight.danger { border-color: var(--red); }
+  .insight.danger strong { color: var(--red); }
+
+  .action-item { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border-bottom: 0.5px solid var(--border); }
+  .action-item:last-child { border-bottom: none; }
+  .action-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); min-width: 24px; margin-top: 2px; }
+  .action-title { font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px; }
+  .action-desc { font-size: 12px; color: var(--text-secondary); }
+
+  .info-row { display: flex; gap: 10px; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 12px; }
+  .info-row:last-child { border-bottom: none; }
+  .info-key { color: var(--text-muted); min-width: 90px; font-family: 'JetBrains Mono', monospace; font-size: 11px; flex-shrink: 0; padding-top: 1px; }
+  .info-val { color: var(--text-secondary); flex: 1; }
+  .info-val strong { color: var(--text-primary); font-weight: 500; }
+
+  .pod-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 4px; }
+  .pod-cell { background: var(--bg-card2); border: 0.5px solid var(--border); border-radius: 6px; padding: 10px; text-align: center; }
+  .pod-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 600; }
+  .pod-lbl { font-size: 10px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
+  .pod-ok { border-color: rgba(62,207,142,0.3); }
+  .pod-ok .pod-val { color: var(--teal); }
+  .pod-warn { border-color: rgba(251,146,60,0.3); }
+  .pod-warn .pod-val { color: var(--orange); }
+  .pod-danger { border-color: rgba(248,113,113,0.3); }
+  .pod-danger .pod-val { color: var(--red); }
+
+  @media (max-width: 768px) {
+    header, main { padding-left: 20px; padding-right: 20px; }
+    .card-grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .card-grid-2, .two-col { grid-template-columns: 1fr; }
+    .pod-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-tag">INCIDENT REPORT</div>
+  <h1>버디박스 이벤트 트래픽 회고</h1>
+  <p>크리에이터 이벤트 대응 현황 및 장애 분석 · DevOps</p>
+  <div class="header-meta">
+    <div class="meta-item">기간 <span>2025.06 – 2026.05</span></div>
+    <div class="meta-item">최근 장애 <span>26.05.08 (뽀니박스)</span></div>
+    <div class="meta-item">역대 최고 트래픽 <span>170K req/min (스코시즘 겨울)</span></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- 01 장애 보고 -->
+  <section>
+    <div class="section-label">01 · 최근 장애 보고 — 26.05.08 뽀니박스</div>
+
+    <div class="incident-card">
+      <div class="incident-title">⚠ [26.05.08 금] 뽀니박스 한정 판매 — 접속 지연 및 서비스 장애</div>
+      <div class="timeline-row">
+        <div class="timeline-time">15:00</div>
+        <div class="timeline-dot dot-red"></div>
+        <div class="timeline-content"><strong>장애 발생</strong> — 한정 수량 판매 오픈 직후 예상 대비 대규모 동시 접속. 버디 서비스 접속 지연 및 장애 발생</div>
+      </div>
+      <div class="timeline-row">
+        <div class="timeline-time">즉시</div>
+        <div class="timeline-dot dot-muted"></div>
+        <div class="timeline-content"><strong>장애 발견</strong> — 다수 담당자 신고</div>
+      </div>
+      <div class="timeline-row">
+        <div class="timeline-time">~15:20</div>
+        <div class="timeline-dot dot-teal"></div>
+        <div class="timeline-content"><strong>조치 완료</strong> — 웹 파드 수량 증설, CPU/Memory 리소스 상향 조정 후 서비스 정상화. 총 약 20분 소요</div>
+      </div>
+    </div>
+
+    <div class="card-grid card-grid-4" style="margin-top:12px;">
+      <div class="stat-card">
+        <div class="stat-label">장애 지속</div>
+        <div class="stat-value" style="color:var(--orange)">~20분</div>
+        <div class="stat-sub">15:00 → 15:20</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">뽀니박스 피크</div>
+        <div class="stat-value" style="color:var(--orange)">~37K</div>
+        <div class="stat-sub">req/min</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">스코시즘 대비</div>
+        <div class="stat-value" style="font-size:18px; color:var(--text-secondary); margin-top:6px;">1/2 ~ 1/4</div>
+        <div class="stat-sub">절대 트래픽은 낮았음</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(248,113,113,0.3);">
+        <div class="stat-label">실제 원인</div>
+        <div class="stat-value" style="font-size:13px; font-family:'Noto Sans KR'; margin-top:6px; color:var(--red); line-height:1.4;">신규 사용자<br>로그인 집중</div>
+        <div class="stat-sub">인증 파드 과부하</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <h3>원인 분석</h3>
+        <div class="info-row">
+          <div class="info-key">트래픽 규모</div>
+          <div class="info-val">스코시즘(80K~170K) 대비 낮은 ~37K — 절대량 자체는 문제 아님</div>
+        </div>
+        <div class="info-row">
+          <div class="info-key">핵심 원인</div>
+          <div class="info-val"><strong>신규 사용자 비율 높음</strong> → 로그인/인증 요청이 단시간에 집중, 예상 대비 높은 인증 파드 부하</div>
+        </div>
+        <div class="info-row">
+          <div class="info-key">패턴</div>
+          <div class="info-val">한정 수량 특성상 특정 시간대에 사용자 요청이 순간적으로 몰림</div>
+        </div>
+        <div class="info-row">
+          <div class="info-key">기존 이력</div>
+          <div class="info-val">vuddy-web OOM (25.12.13 스코시즘 로보) — 메모리 requests/limits 미반영</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>재발 방지 대책</h3>
+        <div class="action-item">
+          <div class="action-num">01</div>
+          <div class="action-content">
+            <div class="action-title">한정 판매 시 크리에이터 규모 무관 사전 증설</div>
+            <div class="action-desc">구독자 수와 무관하게 한정 판매 이벤트는 무조건 사전 Pod 증설 + 리소스 상향 의무화</div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-num">02</div>
+          <div class="action-content">
+            <div class="action-title">로그인/인증 파드 별도 증설</div>
+            <div class="action-desc">신규 사용자 유입이 많은 이벤트는 인증 담당 파드를 분리하여 추가 증설</div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-num">03</div>
+          <div class="action-content">
+            <div class="action-title">MD팀 ↔ 엔지니어링 사전 공유 프로세스</div>
+            <div class="action-desc">이벤트 전 신규 사용자 예상 비율 공유 — 트래픽 절대량 외 인증 부하도 예측 항목에 추가</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="insight danger">
+      <strong>핵심:</strong> 트래픽 절대량이 낮아도 장애 발생 가능 — 신규 사용자 비율이 높은 이벤트는 로그인/인증 파드가 별도 병목이 됨. 스코시즘(재방문 팬덤 중심)과 뽀니박스(신규 유입 중심)는 <strong>다른 증설 전략</strong>이 필요.
+    </div>
+  </section>
+
+  <!-- 02 크리에이터 비교 -->
+  <section>
+    <div class="section-label">02 · 크리에이터별 구독자 vs 트래픽</div>
+
+    <div class="card-grid card-grid-4" style="margin-bottom:16px;">
+      <div class="stat-card">
+        <div class="stat-label">이자반</div>
+        <div class="stat-value" style="color:var(--teal)">228K</div>
+        <div class="stat-sub">구독자 / 피크 142.9K</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">찰스엔터</div>
+        <div class="stat-value" style="color:var(--gray)">883K</div>
+        <div class="stat-sub">구독자 / 피크 51.5K</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">스코시즘</div>
+        <div class="stat-value" style="color:var(--purple)">47.6K</div>
+        <div class="stat-sub">구독자 / 피크 최대 170K</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(251,146,60,0.35);">
+        <div class="stat-label">뽀니박스</div>
+        <div class="stat-value" style="color:var(--orange)">150K</div>
+        <div class="stat-sub">구독자 150K / 피크 37K · 장애 발생</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3ecf8e"></div>이자반</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>찰스엔터</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>스코시즘</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#fb923c"></div>뽀니박스</div>
+        <span style="margin-left:auto; font-size:11px; color:var(--text-muted);">막대 = 구독자(K, 좌) · ◆ = 피크 트래픽(K, 우)</span>
+      </div>
+      <div class="chart-wrap" style="height:300px;">
+        <canvas id="compareChart" role="img" aria-label="크리에이터별 구독자 대비 피크 트래픽">이자반 228K 구독/142.9K 트래픽, 찰스엔터 883K 구독/51.5K 트래픽, 스코시즘 47.6K 구독/170K 트래픽, 뽀니박스 150K 구독/37K 트래픽</canvas>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <h3>충성도 배율 — 구독자 1K당 트래픽</h3>
+        <div class="chart-wrap" style="height:200px;">
+          <canvas id="ratioChart" role="img" aria-label="구독자 1K당 트래픽 배율">이자반 0.63x, 찰스엔터 0.06x, 스코시즘 3.57x, 뽀니박스 0.24x</canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>크리에이터 특성 요약</h3>
+        <div class="info-row">
+          <div class="info-key">이자반</div>
+          <div class="info-val">228K 구독 · 한정판매 시 높은 트래픽 · 재방문 팬덤 중심</div>
+        </div>
+        <div class="info-row">
+          <div class="info-key">찰스엔터</div>
+          <div class="info-val">883K 구독 · 트래픽 전환율 낮음 · 구독자 대비 충성도 낮음</div>
+        </div>
+        <div class="info-row">
+          <div class="info-key">스코시즘</div>
+          <div class="info-val"><strong style="color:var(--purple)">충성도 최고(3.57x)</strong> · 재방문 중심 · 역대 최고 트래픽 170K</div>
+        </div>
+        <div class="info-row">
+          <div class="info-key">뽀니박스</div>
+          <div class="info-val">트래픽 자체는 낮으나 <strong style="color:var(--orange)">신규 사용자 비율 높음</strong> → 인증 병목으로 장애</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="insight warn">
+      <strong>인사이트:</strong> 충성도 배율이 높은 스코시즘형은 <strong>웹 파드 집중 증설</strong>이 유효. 뽀니박스형처럼 신규 유입 비율이 높은 크리에이터는 전체 트래픽이 낮아도 <strong>인증/로그인 파드를 별도 증설</strong>해야 함. 증설 전략을 크리에이터 특성별로 분리 필요.
+    </div>
+  </section>
+
+  <!-- 03 전체 이벤트 현황 -->
+  <section>
+    <div class="section-label">03 · 전체 이벤트 트래픽 현황</div>
+
+    <div class="card">
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3ecf8e"></div>이자반</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>찰스엔터</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>스코시즘</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#fb923c"></div>뽀니박스</div>
+      </div>
+      <div class="chart-wrap" style="height:280px;">
+        <canvas id="timelineChart" role="img" aria-label="전체 이벤트 피크 트래픽 추이">이자반1차 142.9K 외 전체 이벤트</canvas>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>이벤트</th><th>일자</th><th>Peak 트래픽</th><th>DAU</th><th>1일 매출</th><th>구독자</th><th>유형</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>이자반 1차</strong></td><td class="mono">25.06.09</td><td class="mono">142.9K</td><td class="mono">18,815</td><td class="mono">3,030만</td><td class="mono">228K</td><td><span class="badge badge-orange">한정판매</span></td></tr>
+            <tr><td><strong>이자반 2차</strong></td><td class="mono">25.06.10</td><td class="mono">57.9K</td><td class="mono">14,185</td><td class="mono">7,916만</td><td class="mono">228K</td><td><span class="badge badge-gray">예약판매</span></td></tr>
+            <tr><td><strong>찰스엔터 예약</strong></td><td class="mono">25.06.19</td><td class="mono">51.5K</td><td class="mono">17,619</td><td class="mono">6,586만</td><td class="mono">883K</td><td><span class="badge badge-gray">예약판매</span></td></tr>
+            <tr><td><strong>찰스엔터 SNS</strong></td><td class="mono">25.06.22</td><td class="mono">17.8K</td><td class="mono">19,242</td><td class="mono">2,898만</td><td class="mono">883K</td><td><span class="badge badge-gray">SNS홍보</span></td></tr>
+            <tr><td><strong>스코시즘 한정</strong></td><td class="mono">25.06.23</td><td class="mono orange-val">115.4K</td><td class="mono">12,079</td><td class="mono">1억 8,885만</td><td class="mono">47.6K</td><td><span class="badge badge-orange">한정판매</span></td></tr>
+            <tr><td><strong>스코시즘 2차</strong></td><td class="mono">25.07.28</td><td class="mono">25.2K</td><td class="mono">4,016</td><td class="mono">3,128만</td><td class="mono">47.6K</td><td><span class="badge badge-orange">한정판매</span></td></tr>
+            <tr><td><strong>스코시즘 보이스팩</strong></td><td class="mono">25.07.31</td><td class="mono">31.4K</td><td class="mono">6,449</td><td class="mono">7,739만</td><td class="mono">47.6K</td><td><span class="badge badge-orange">한정판매</span></td></tr>
+            <tr><td><strong>스코시즘 2주년</strong></td><td class="mono">25.08.20</td><td class="mono">25.2K</td><td class="mono">6,749</td><td class="mono">6,322만</td><td class="mono">47.6K</td><td><span class="badge badge-gray">예약판매</span></td></tr>
+            <tr><td><strong>스코시즘 겨울한정</strong></td><td class="mono">26.01.21</td><td class="mono red-val">170K ★</td><td class="mono">8,190</td><td class="mono">1억 3,640만</td><td class="mono">47.6K</td><td><span class="badge badge-orange">한정판매</span></td></tr>
+            <tr><td><strong>스코시즘 라이브</strong></td><td class="mono">26.01.28</td><td class="mono">35K</td><td class="mono">2,906</td><td class="mono">3,065만</td><td class="mono">47.6K</td><td><span class="badge badge-teal">라이브커머스</span></td></tr>
+            <tr><td><strong>뽀니박스 (BreadTube)</strong></td><td class="mono">26.05.08</td><td class="mono orange-val">37K</td><td class="mono">5,457</td><td class="mono">1,010만</td><td class="mono">150K</td><td><span class="badge badge-red">장애 발생</span> <span class="badge badge-orange">500개 한정</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:11px; color:var(--text-muted); margin-top:10px; font-family:'JetBrains Mono',monospace;">★ 역대 최고 트래픽 &nbsp;·&nbsp; 뽀니박스: 트래픽 낮으나 신규 사용자 집중으로 장애 발생 &nbsp;·&nbsp; 파드 조정 없이 처리 가능 기준: 17K req/min</p>
+    </div>
+  </section>
+
+  <!-- 04 리소스 현황 -->
+  <section>
+    <div class="section-label">04 · Pod 리소스 현황 및 대응 기준</div>
+
+    <div class="card-grid card-grid-2">
+      <div class="card">
+        <h3>이벤트별 Pod 운영 실적</h3>
+        <div class="pod-grid">
+          <div class="pod-cell pod-ok"><div class="pod-val">3–5</div><div class="pod-lbl">평시 (ea)<br>~17K처리</div></div>
+          <div class="pod-cell pod-ok"><div class="pod-val">10</div><div class="pod-lbl">찰스엔터<br>충분</div></div>
+          <div class="pod-cell pod-warn"><div class="pod-val">20</div><div class="pod-lbl">스코시즘<br>100K처리</div></div>
+          <div class="pod-cell pod-warn"><div class="pod-val">30</div><div class="pod-lbl">이자반 2차<br>과다</div></div>
+          <div class="pod-cell pod-danger"><div class="pod-val">100+</div><div class="pod-lbl">찰스엔터<br>MSK 에러</div></div>
+        </div>
+        <div class="insight warn" style="margin-top:12px; font-size:12px;">
+          <strong>주의:</strong> Pod 과다 증설 시 MSK 커넥터 에러 발생 — Pod 증설 시 연계 리소스(MSK, 메모리) 함께 증설 필요
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>알려진 이슈 및 개선 현황</h3>
+        <div class="action-item">
+          <div class="action-num" style="color:var(--red)">!</div>
+          <div class="action-content">
+            <div class="action-title">Pod 조정 리드타임 ~1.5시간</div>
+            <div class="action-desc">순간 spike 대응 불가 — 이벤트 전 사전 증설 필수. 파드 조정 없이 처리 가능한 기준치: <strong>17K req/min</strong></div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-num" style="color:var(--red)">!</div>
+          <div class="action-content">
+            <div class="action-title">로그인/인증 파드 미분리 (신규 과제)</div>
+            <div class="action-desc">뽀니박스 장애 원인 — 신규 유입 이벤트 시 인증 병목, 별도 증설 항목 추가 필요</div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-num" style="color:var(--teal)">✓</div>
+          <div class="action-content">
+            <div class="action-title">CDN 개선 효과 확인</div>
+            <div class="action-desc">스코시즘 2차부터 ALB 커넥션 감소 — 7/31 보이스팩 10ea로 처리 성공</div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-num" style="color:var(--teal)">✓</div>
+          <div class="action-content">
+            <div class="action-title">KEDA Cron 설정 (25.07.31~)</div>
+            <div class="action-desc">이벤트 기반 자동 스케일링 적용 — 인증 파드 포함 고도화 필요</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="insight" style="margin-top:12px;">
+      <strong>권장 증설 전략:</strong>
+      스코시즘형(재방문 충성 팬덤) → 웹 파드 20ea+ 사전 증설.
+      뽀니박스형(신규 유입 중심) → 전체 트래픽이 낮아도 <strong>인증/로그인 파드 별도 증설</strong> + CPU/Memory 리소스 상향.
+      한정 판매 공통 → 크리에이터 규모 무관 사전 증설 의무화.
+    </div>
+  </section>
+
+</main>
+
+<script>
+const C = { teal:'#3ecf8e', purple:'#a78bfa', orange:'#fb923c', gray:'#6b7280' };
+
+new Chart(document.getElementById('compareChart'), {
+  data: {
+    labels: ['이자반\n(228K 구독)','찰스엔터\n(883K 구독)','스코시즘\n(47.6K 구독)','뽀니박스\n(150K 구독)'],
+    datasets: [
+      { type:'bar', label:'구독자 (K)', data:[228,883,47.6,150],
+        backgroundColor:[C.teal+'33',C.gray+'33',C.purple+'33',C.orange+'33'],
+        borderColor:[C.teal,C.gray,C.purple,C.orange], borderWidth:1, yAxisID:'y1' },
+      { type:'line', label:'피크 트래픽 (K)', data:[142.9,51.5,170,37],
+        borderColor:'#ffffff33', backgroundColor:'transparent',
+        pointBackgroundColor:[C.teal,C.gray,C.purple,C.orange],
+        pointBorderColor:[C.teal,C.gray,C.purple,C.orange],
+        pointRadius:8, pointStyle:'rectRot', tension:0.3,
+        yAxisID:'y2', borderDash:[4,4] }
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false} },
+    scales: {
+      x:{ ticks:{color:'#6b7280',font:{size:11}}, grid:{color:'#ffffff0a'} },
+      y1:{ type:'linear', position:'left', ticks:{color:'#6b7280',callback:v=>v+'K'}, grid:{color:'#ffffff08'}, title:{display:true,text:'구독자 (K)',color:'#555a66',font:{size:10}} },
+      y2:{ type:'linear', position:'right', ticks:{color:'#6b7280',callback:v=>v+'K'}, grid:{drawOnChartArea:false}, title:{display:true,text:'트래픽 (K req/min)',color:'#555a66',font:{size:10}} }
+    }
+  }
+});
+
+new Chart(document.getElementById('ratioChart'), {
+  type:'bar',
+  data: {
+    labels:['이자반','찰스엔터','스코시즘\n(겨울)','뽀니박스'],
+    datasets:[{ data:[0.63,0.06,3.57,0.25],
+      backgroundColor:[C.teal+'bb',C.gray+'bb',C.purple+'bb',C.orange+'bb'],
+      borderColor:[C.teal,C.gray,C.purple,C.orange], borderWidth:1, borderRadius:4 }]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>'배율: '+ctx.parsed.y.toFixed(2)+'x'}} },
+    scales: {
+      x:{ ticks:{color:'#6b7280',font:{size:11}}, grid:{color:'#ffffff08'} },
+      y:{ ticks:{color:'#6b7280',callback:v=>v+'x'}, grid:{color:'#ffffff08'} }
+    }
+  }
+});
+
+const tlC = [C.teal,C.teal,C.gray,C.gray,C.purple,C.purple,C.purple,C.purple,C.purple,C.purple,C.orange];
+new Chart(document.getElementById('timelineChart'), {
+  type:'bar',
+  data: {
+    labels:['이자반1차\n(6/9)','이자반2차\n(6/10)','찰스엔터예약\n(6/19)','찰스엔터SNS\n(6/22)','스코시즘한정\n(6/23)','스코시즘2차\n(7/28)','스코시즘보이스팩\n(7/31)','스코시즘2주년\n(8/20)','스코시즘겨울\n(1/21)','라이브커머스\n(1/28)','뽀니박스\n(5/8)'],
+    datasets:[{ data:[142.9,57.9,51.5,17.8,115.4,25.2,31.4,25.2,170,35,37],
+      backgroundColor:tlC.map(c=>c+'bb'), borderColor:tlC, borderWidth:1, borderRadius:3 }]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>'피크: '+ctx.parsed.y+'K req/min'}} },
+    scales: {
+      x:{ ticks:{color:'#6b7280',font:{size:10},autoSkip:false,maxRotation:25}, grid:{color:'#ffffff08'} },
+      y:{ ticks:{color:'#6b7280',callback:v=>v+'K'}, grid:{color:'#ffffff08'} }
+    }
+  }
+});
+</script>
+</body>
+</html>
